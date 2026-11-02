@@ -1,0 +1,23 @@
+# 与主仓 wishful-claw 保持一致：C# 与项目文件用 CRLF，文档与配置用 LF。
+* text=auto
+
+*.cs        text eol=crlf
+*.csproj    text eol=crlf
+*.sln       text eol=crlf
+*.props     text eol=crlf
+*.targets   text eol=crlf
+
+*.md        text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.xml       text eol=lf
+.gitignore  text eol=lf
+.gitattributes text eol=lf
+
+# 原生二进制不碰
+*.dll   binary
+*.so    binary
+*.dylib binary
+*.lib   binary
+*.pdb   binary
