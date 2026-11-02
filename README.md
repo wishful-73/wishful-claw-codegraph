@@ -14,6 +14,22 @@ WishfulClaw 的代码图谱模块。从主仓 [`wishful-claw`](https://github.co
 
 迁移是主仓下一个迭代的活。本仓库先立骨架，把边界和约束写清楚 —— 免得搬的时候边搬边想。
 
+## 本仓当前的分发内容
+
+代码本体还没来，但仓库已经在用了：**语言包**（tree-sitter 语法库，18 种语言 + 核心运行时）从本仓的 release 资产分发。
+
+- Release：[`grammars-v1`](https://github.com/wishful-73/wishful-claw-codegraph/releases/tag/grammars-v1)（纯资产发布，与主程序版本解耦）
+- 资产：`codegraph-grammars-win-x64.zip` —— 4,830,638 字节（原始 dll 42.54 MB，压缩率约 9:1）
+- 直链：`https://github.com/wishful-73/wishful-claw-codegraph/releases/download/grammars-v1/codegraph-grammars-win-x64.zip`
+- 生成脚本：主仓 `scripts/pack-codegraph-grammars.mjs`
+
+WishfulClaw 客户端在「设置 → 应用与插件 → 代码图谱」点「下载语言包」时按需拉取，不随安装包发布。
+
+两条硬约束：
+
+1. **本仓必须保持 public** —— 私有仓的 release 资产匿名请求一律 404，客户端直接拿不到。
+2. **语言包变更时才发 `grammars-v2`**，不要跟主程序版本走。
+
 ## 要迁什么
 
 主仓 `src/runtime/WishfulClaw.CodeGraph/`，**196 个源码文件**（195 个 `.cs` + 1 个 `.csproj`，约 5.3 万行）：
@@ -56,7 +72,7 @@ WishfulClaw 的代码图谱模块。从主仓 [`wishful-claw`](https://github.co
 
 ## 怎么被主仓消费
 
-按主仓 S-303 定的口径：**可选插件，主仓按需下载**。具体的插件清单格式与下载路径，迁移时再定。
+按主仓 S-303 定的口径：**可选插件，主仓按需下载**。语言包的下载路径与资产命名见上文「本仓当前的分发内容」。
 
 不用 submodule：版本会锁死在一个 commit 上、克隆要带 `--recursive`、CI 里 submodule 更新失败排查起来很烦。这个模块的改动频率跟主仓不同步，用版本号引用才对得上。
 
@@ -68,4 +84,13 @@ WishfulClaw 的代码图谱模块。从主仓 [`wishful-claw`](https://github.co
 
 ## 许可证
 
-内部组件，暂不对外发布。
+**待定 —— LICENSE 尚未确定**（选型待决）。
+
+本仓目前公开，但**只含骨架与语言包资源，代码本体尚未迁入**：`WishfulClaw.CodeGraph` 的源码仍留在主仓 `src/runtime/` 下原位，可执行代码一行都不在这里。
+
+正式开放源码前，需要：
+
+1. 定下 LICENSE（MIT / Apache-2.0 / 不开源，待决）；
+2. **逐项审核第三方许可** —— 从 `AIDotNet/CodeGraph` vendor 进来的代码，以及 `TreeSitter.DotNet` 与各语言 grammar 的许可证条款，迁移时随代码一并保留，不能因为换了个仓库就以为可以重签。
+
+在此之前，本仓的 release 资产可供 WishfulClaw 客户端下载使用，但**不构成对代码的任何授权**。
