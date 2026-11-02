@@ -16,7 +16,7 @@ WishfulClaw 的代码图谱模块。从主仓 [`wishful-claw`](https://github.co
 
 ## 要迁什么
 
-主仓 `src/runtime/WishfulClaw.CodeGraph/`，**281 个文件**：
+主仓 `src/runtime/WishfulClaw.CodeGraph/`，**196 个源码文件**（195 个 `.cs` + 1 个 `.csproj`，约 5.3 万行）：
 
 | 目录 | 职责 |
 |---|---|
