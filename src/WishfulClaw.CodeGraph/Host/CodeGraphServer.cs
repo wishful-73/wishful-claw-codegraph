@@ -97,7 +97,12 @@ internal sealed class StdioRequestContext : IWorkerRequestContext
         using (var writer = new Utf8JsonWriter(buffer, JsonFormat.WriterOptions))
         {
             writer.WriteStartObject();
-            writer.WriteString("event", eventName);
+            writer.WriteString("jsonrpc", "2.0");
+            // Server -> client notifications must sit under the reserved
+            // `notifications/` prefix, otherwise an MCP client drops the frame as
+            // a malformed response. The original `codegraph/...` name is kept as
+            // the suffix so the host can still dispatch on it verbatim.
+            writer.WriteString("method", "notifications/" + eventName);
             writer.WritePropertyName("params");
             JsonSerializer.Serialize(writer, parameters, typeInfo);
             writer.WriteEndObject();
@@ -131,4 +136,24 @@ internal static class JsonFormat
     };
 
     internal static ReadOnlyMemory<byte> Newline { get; } = Encoding.UTF8.GetBytes("\n");
+
+    /// <summary>
+    /// Writes one newline-terminated frame under the shared gate. Both the raw
+    /// `codegraph/*` dispatcher and the MCP layer go through this, so the two
+    /// never interleave mid-line.
+    /// </summary>
+    internal static async Task WriteLineAsync(Stream stdout, SemaphoreSlim gate, ReadOnlyMemory<byte> utf8Json)
+    {
+        await gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await stdout.WriteAsync(utf8Json).ConfigureAwait(false);
+            await stdout.WriteAsync(Newline).ConfigureAwait(false);
+            await stdout.FlushAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
 }

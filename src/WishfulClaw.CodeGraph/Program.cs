@@ -68,15 +68,25 @@ while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
 
         if (string.IsNullOrEmpty(method))
         {
-            await WriteErrorAsync(stdout, writeGate, id, -32600, "Invalid request: missing method.").ConfigureAwait(false);
+            await McpProtocol.WriteErrorAsync(stdout, writeGate, id, -32600, "Invalid request: missing method.").ConfigureAwait(false);
             continue;
         }
 
         var parameters = root.TryGetProperty("params", out var paramsElement) ? paramsElement : default;
 
+        // MCP handshake and tool surface come first. The host's MCP client only
+        // ever speaks initialize / tools/list / tools/call, none of which exist
+        // in the codegraph/* table — without this branch the handshake dies on
+        // -32601 before a single tool is listed.
+        if (McpProtocol.Owns(method))
+        {
+            await McpProtocol.HandleAsync(method, id, parameters, server, context, stdout, writeGate).ConfigureAwait(false);
+            continue;
+        }
+
         if (!server.TryGet(method, out var handler))
         {
-            await WriteErrorAsync(stdout, writeGate, id, -32601, $"Method not found: {method}").ConfigureAwait(false);
+            await McpProtocol.WriteErrorAsync(stdout, writeGate, id, -32601, $"Method not found: {method}").ConfigureAwait(false);
             continue;
         }
 
@@ -87,11 +97,11 @@ while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
         }
         catch (OperationCanceledException)
         {
-            await WriteErrorAsync(stdout, writeGate, id, -32800, "Request cancelled.").ConfigureAwait(false);
+            await McpProtocol.WriteErrorAsync(stdout, writeGate, id, -32800, "Request cancelled.").ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await WriteErrorAsync(stdout, writeGate, id, -32603, ex.Message).ConfigureAwait(false);
+            await McpProtocol.WriteErrorAsync(stdout, writeGate, id, -32603, ex.Message).ConfigureAwait(false);
         }
     }
 }
@@ -105,30 +115,16 @@ static async Task WriteResponseAsync(Stream stdout, SemaphoreSlim gate, JsonElem
     using (var writer = new Utf8JsonWriter(buffer, JsonFormat.WriterOptions))
     {
         writer.WriteStartObject();
+        // `jsonrpc` is mandatory in JSON-RPC 2.0 — an MCP client drops a frame
+        // without it, and this dispatcher serves both surfaces now.
+        writer.WriteString("jsonrpc", "2.0");
         WriteId(writer, id);
         writer.WritePropertyName("result");
         response.WriteBody(writer);
         writer.WriteEndObject();
     }
 
-    await WriteLineAsync(stdout, gate, buffer.WrittenMemory).ConfigureAwait(false);
-}
-
-static async Task WriteErrorAsync(Stream stdout, SemaphoreSlim gate, JsonElement? id, int code, string message)
-{
-    var buffer = new ArrayBufferWriter<byte>();
-    using (var writer = new Utf8JsonWriter(buffer, JsonFormat.WriterOptions))
-    {
-        writer.WriteStartObject();
-        WriteId(writer, id);
-        writer.WriteStartObject("error");
-        writer.WriteNumber("code", code);
-        writer.WriteString("message", message);
-        writer.WriteEndObject();
-        writer.WriteEndObject();
-    }
-
-    await WriteLineAsync(stdout, gate, buffer.WrittenMemory).ConfigureAwait(false);
+    await JsonFormat.WriteLineAsync(stdout, gate, buffer.WrittenMemory).ConfigureAwait(false);
 }
 
 static void WriteId(Utf8JsonWriter writer, JsonElement? id)
@@ -141,20 +137,5 @@ static void WriteId(Utf8JsonWriter writer, JsonElement? id)
     else
     {
         writer.WriteNullValue();
-    }
-}
-
-static async Task WriteLineAsync(Stream stdout, SemaphoreSlim gate, ReadOnlyMemory<byte> utf8Json)
-{
-    await gate.WaitAsync().ConfigureAwait(false);
-    try
-    {
-        await stdout.WriteAsync(utf8Json).ConfigureAwait(false);
-        await stdout.WriteAsync(JsonFormat.Newline).ConfigureAwait(false);
-        await stdout.FlushAsync().ConfigureAwait(false);
-    }
-    finally
-    {
-        gate.Release();
     }
 }

@@ -187,12 +187,12 @@ codegraph_callees   codegraph_impact    codegraph_files     codegraph_status
 
 ## 七、待定项
 
-| # | 问题 | 影响 |
+| # | 问题 | 状态 |
 |---|---|---|
-| 1 | `mcp-client.ts` 是否把 server → client 的 notification 透出成事件 | 索引进度条依赖它，没有就得在客户端加通道 |
-| 2 | `disconnectAll` 时机 vs 索引长任务 | 索引跑到一半被 disconnect 会截断，需要确认退出流程 |
-| 3 | `codegraph.exe` 分发形态 | 现在 `bin/Debug/net11.0/codegraph.exe` 只有 127 KB，是 framework-dependent；发布要定 self-contained 还是 AOT |
-| 4 | 语言包路径传递 | 现在默认 `{dataDir}/plugins/codegraph/grammars`，走 MCP 后靠 `env` 传给子进程 |
+| 1 | `mcp-client.ts` 是否把 server → client 的 notification 透出成事件 | **已实测（2026-11-03 09:40）：不透出。** `mcp-client.ts` 全文只挂了 `transport.onclose`（`:166`，用于把状态从 `connected` 打回 `disconnected`），没有任何 notification handler。SDK 收到未注册的 notification 直接丢弃 ⇒ **索引进度事件透不出来**。解法二选一：主仓 client 补一个 handler（约 20 行），或 CodeGraph 侧不推进度、索引改为同步长调用（体验退化）。倾向前者 |
+| 2 | `disconnectAll` 时机 vs 索引长任务 | **已实测（2026-11-03 09:40）：不在正常退出流程里。** 全部调用点是用户动作 —— 禁用/卸载扩展（`extension-plugin-sync.ts:163/175`）、手动断开/重连（`mcp-handlers.ts:145/172`）、整组断开（`:261`）。进程被杀会截断索引，但**原 Worker 形态同样如此**，不是新增风险。需要 CodeGraph 自己保证索引中断后下次可恢复 |
+| 3 | `codegraph.exe` 分发形态 | 待定。现在 `bin/Debug/net11.0/codegraph.exe` 只有 127 KB，是 framework-dependent；发布要定 self-contained 还是 AOT |
+| 4 | 语言包路径传递 | 待定。现在默认 `{dataDir}/plugins/codegraph/grammars`，走 MCP 后靠 `env` 传给子进程 |
 
 ---
 
