@@ -109,13 +109,11 @@ WishfulClaw 客户端在「设置 → 应用与插件 → 代码图谱」点「�
 
 ## 许可证
 
-**待定 —— LICENSE 尚未确定**（选型待决）。
+[Apache License 2.0](LICENSE) —— 与主仓 [`wishful-claw`](https://github.com/wishful-73/wishful-claw) 保持一致。
 
-本仓目前公开，但**只含骨架与语言包资源，代码本体尚未迁入**：`WishfulClaw.CodeGraph` 的源码仍留在主仓 `src/runtime/` 下原位，可执行代码一行都不在这里。
+第三方来源的代码不在本 LICENSE 覆盖范围内，随代码保留其原始许可声明：
 
-正式开放源码前，需要：
+- 从 [`AIDotNet/CodeGraph`](https://github.com/AIDotNet/CodeGraph) vendor 进来的代码：**MIT**
+- `TreeSitter.DotNet` 与各语言 grammar：各自许可，见对应 NuGet 包
 
-1. 定下 LICENSE（MIT / Apache-2.0 / 不开源，待决）；
-2. **逐项审核第三方许可** —— 从 `AIDotNet/CodeGraph` vendor 进来的代码，以及 `TreeSitter.DotNet` 与各语言 grammar 的许可证条款，迁移时随代码一并保留，不能因为换了个仓库就以为可以重签。
-
-在此之前，本仓的 release 资产可供 WishfulClaw 客户端下载使用，但**不构成对代码的任何授权**。
+MIT 与 Apache-2.0 兼容 —— MIT 代码可以并入 Apache-2.0 项目，保留原版权声明即可，不需要重签。
