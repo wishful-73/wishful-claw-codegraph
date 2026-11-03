@@ -10,9 +10,28 @@ WishfulClaw 的代码图谱模块。从主仓 [`wishful-claw`](https://github.co
 
 ## 当前状态
 
-**骨架，代码尚未迁入。** 主仓的 `WishfulClaw.CodeGraph` 仍在原位、仍参与构建。
+**代码已迁入，可独立编译、可独立运行。** 主仓的 `src/runtime/WishfulClaw.CodeGraph/` 尚未删除 —— 主仓侧的接入改造（改走子进程）还没做，两边会并存一段时间。
 
-迁移是主仓下一个迭代的活。本仓库先立骨架，把边界和约束写清楚 —— 免得搬的时候边搬边想。
+本仓**不引用主仓的任何程序集**。这不是口号，是设计约束：`Host/HostContracts.cs` 自带那 5 个契约类型，`Support/CodeGraphJson.cs` 自带 JSON 读取工具，`CodeGraphDataDir.cs` 内联了数据目录名。往这里加主仓依赖之前，先想清楚为什么。
+
+产物是一个独立进程：
+
+```
+codegraph.exe  <── stdio，newline-delimited JSON-RPC ──  宿主
+```
+
+```jsonc
+// 请求
+{"id": 1, "method": "codegraph/explore", "params": {"query": "..."}}
+// 响应
+{"id": 1, "result": {...}}
+// 错误
+{"id": 1, "error": {"code": -32601, "message": "Method not found: ..."}}
+// 进度事件（长任务执行中推送，无 id）
+{"event": "codegraph/index-progress", "params": {...}}
+```
+
+方法名与主仓原来的 worker RPC 完全一致（`codegraph/index`、`codegraph/explore`、`codegraph/status` …），所以协议层没有重新设计。
 
 ## 本仓当前的分发内容
 
@@ -30,12 +49,13 @@ WishfulClaw 客户端在「设置 → 应用与插件 → 代码图谱」点「�
 1. **本仓必须保持 public** —— 私有仓的 release 资产匿名请求一律 404，客户端直接拿不到。
 2. **语言包变更时才发 `grammars-v2`**，不要跟主程序版本走。
 
-## 要迁什么
+## 目录结构
 
-主仓 `src/runtime/WishfulClaw.CodeGraph/`，**196 个源码文件**（195 个 `.cs` + 1 个 `.csproj`，约 5.3 万行）：
+`src/WishfulClaw.CodeGraph/`，**200 个源码文件**（199 个 `.cs` + 1 个 `.csproj`，约 5.3 万行）：
 
 | 目录 | 职责 |
 |---|---|
+| `Host/` | 自带契约 + stdio JSON-RPC 宿主（**本仓独有，不来自主仓**） |
 | `Context/` | 上下文构建 |
 | `Extraction/` | 语法提取（tree-sitter 胶水） |
 | `Graph/` | 图上操作 |
@@ -49,32 +69,37 @@ WishfulClaw 客户端在「设置 → 应用与插件 → 代码图谱」点「�
 
 顶层另有 `CodeGraphEngine` / `CodeGraphModule` / `CodeGraphNodeIdFactory` 等 13 个类型。
 
-## 迁移前必须解决的三件事
+## 断依赖时处理的三件事
 
-### 1. 两条 `ProjectReference` 要断掉
+### 1. 两条 `ProjectReference` 已删掉
 
-当前 csproj 直接引用主仓：
+原 csproj 直接引用主仓的 `WishfulClaw.Contracts` 与 `WishfulClaw.Core`。实测真实用量收敛得很干净，于是：
 
-```xml
-<ProjectReference Include="..\WishfulClaw.Contracts\WishfulClaw.Contracts.csproj" />
-<ProjectReference Include="..\WishfulClaw.Core\WishfulClaw.Core.csproj" />
-```
+- 5 个契约类型抄进 `Host/HostContracts.cs`（形状逐字兼容，20+ 个 handler 零改动）
+- `JsonHelpers`（169 行）抄进 `Support/CodeGraphJson.cs`，改名 `CodeGraphJson` 避免与主仓同名类型二义
+- `WishfulClawPaths.DataDirName` 内联成字面量 `".wishful-claw"`
 
-实测外部耦合只有 **7 个文件 / 19 行**，但这 19 行不能靠"复制一份 Contracts"糊过去 —— 要么抽成独立的协议包，要么改成 IPC 边界。
+断完 `dotnet build` 0 警告 0 错误 —— 这条已经过了。
 
 ### 2. `Storage/` 是独立库，最容易漏
 
 15 个文件，不是语法树的一部分，剥离时容易被当成普通目录跟着搬。它有自己的 SQLite 连接工厂与 schema。
 
-### 3. 工具调用从进程内变跨进程
+### 3. 工具调用已从进程内变跨进程
 
-现在 `CodeGraphModule` 像内置模块一样挂在 Worker catalog 里，调用是进程内的。变成插件后要走 IPC，查询延迟会上升 —— 要么做批量接口，要么接受这个代价。
+原来 `CodeGraphModule` 挂在主仓 Worker catalog 里，调用是进程内的。现在是独立进程 + stdio JSON-RPC，每个请求多一次管道往返。查询延迟会上升 —— 要么做批量接口，要么接受这个代价。**这是长期成本，不是一次性改动。**
 
-## 怎么被主仓消费
+## 与主仓的关系（接入未完成）
 
-按主仓 S-303 定的口径：**可选插件，主仓按需下载**。语言包的下载路径与资产命名见上文「本仓当前的分发内容」。
+主仓那边还有三件没做，做完才算真正插件化：
 
-不用 submodule：版本会锁死在一个 commit 上、克隆要带 `--recursive`、CI 里 submodule 更新失败排查起来很烦。这个模块的改动频率跟主仓不同步，用版本号引用才对得上。
+1. 删掉 `src/runtime/WishfulClaw.CodeGraph/` —— 现在两边并存
+2. 删掉 `WishfulClaw.Worker.csproj` 的 `ProjectReference`、`WorkerModuleCatalog.cs` 的 `new CodeGraphModule()`、`Program.cs` 的 `CodeGraphNativeLibraryResolver.Install()`
+3. 加一个子进程管理器：拉起 `codegraph.exe`、按 method 转发、把进度事件转成渲染端推送
+
+主仓那 20+ 个 `codegraph/*` 调用点（agent 工具、渲染端图表、设置页）改走子进程之后，本仓才真正被消费。
+
+不用 submodule：版本会锁死在一个 commit 上、克隆要带 `--recursive`、CI 里 submodule 更新失败排查起来很烦。用 release 产物 + 版本号引用才对得上。
 
 ## 第三方来源
 
